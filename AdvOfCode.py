@@ -1,4 +1,5 @@
 import numpy as np
+from time import sleep
 
 ### DAY 1 CODE ###
 
@@ -148,20 +149,192 @@ def crane_operator(lst_of_instructs, version):
 		SHIP_CRATES = SHIP_CRATES_b
 	return SHIP_CRATES['1'][-1] + SHIP_CRATES['2'][-1] + SHIP_CRATES['3'][-1] + SHIP_CRATES['4'][-1] + SHIP_CRATES['5'][-1] + SHIP_CRATES['6'][-1] + SHIP_CRATES['7'][-1] + SHIP_CRATES['8'][-1] + SHIP_CRATES['9'][-1]
 
-print(crane_operator(parse_rounds("input_Day5.txt")[10:], 'a'))
-print(crane_operator(parse_rounds("input_Day5.txt")[10:], 'b'))
+#print(crane_operator(parse_rounds("input_Day5.txt")[10:], 'a'))
+#print(crane_operator(parse_rounds("input_Day5.txt")[10:], 'b'))
 
 ### DAY 6 CODE ###
 
+def parse_stream(txt_fle):
+	with open(txt_fle, "r") as myfile:
+		stream = myfile.read().strip()
+		return stream
 
+def all_diff(strng):
+	settified = set(list(strng))
+	return len(strng) == len(settified)
+
+def start_of_packet(stream):
+	for i in range(3, len(stream)):
+		if all_diff(stream[(i - 3):(i + 1)]):
+			break
+	return i + 1
+
+def start_of_message(stream):
+	for i in range(13, len(stream)):
+		if all_diff(stream[(i - 13):(i + 1)]):
+			break
+	return i + 1
+
+#print(start_of_packet(parse_stream("input_Day6.txt")), start_of_message(parse_stream("input_Day6.txt")))
 
 ### DAY 7 CODE ###
 
+class Direct:
+  def __init__(self, name, parent):
+  	self.name = name
+  	self.parent = parent
+  	self.children = []
+  	self.files = []
 
+  def get_size(self):
+  	size = 0
+  	for f in self.files:
+  		size += int(f.split(' ')[0])
+  	for c in self.children:
+  		size += c.get_size()
+  	return size
+
+  def child_names(self):
+  	return [c.name for c in self.children]
+
+ROOT = Direct('/', None)
+CURR_DIR = ROOT
+
+def add_dir(dir_name):
+	global CURR_DIR, ROOT
+	if dir_name not in CURR_DIR.child_names():
+		CURR_DIR.children += [Direct(dir_name, CURR_DIR)]
+
+def process_cd(command):
+	global CURR_DIR, ROOT
+	dir_name = command.split(' ')[2]
+	if command == '$ cd /':
+		CURR_DIR = ROOT
+	elif command == '$ cd ..':
+		if CURR_DIR != ROOT:
+			CURR_DIR = CURR_DIR.parent
+	elif '$ cd ' in command:
+		add_dir(dir_name)
+		ind = CURR_DIR.child_names().index(dir_name)
+		CURR_DIR = CURR_DIR.children[ind]
+
+def process_dirs_fles(command):
+	global CURR_DIR, ROOT
+	com1, com2 = command.split(' ')
+	if com1 == 'dir':
+		add_dir(com2)
+	else:
+		CURR_DIR.files += [command]
+
+def run_commands(lst_of_commands):
+	global CURR_DIR, ROOT
+	for command in lst_of_commands:
+		if '$ cd ' in command:
+			process_cd(command)
+		elif command == '$ ls':
+			continue
+		else:
+			process_dirs_fles(command)
+
+def get_sizes(root_dir):
+	sizes = [root_dir.get_size()]
+	for child in root_dir.children:
+		sizes += get_sizes(child)
+	return sizes
+
+def sum_sizes():
+	sizes_less_100000 = [s for s in get_sizes(ROOT) if s <= 100000]
+	return sum(sizes_less_100000)
+
+def size_smallest_dir(root_dir, min_needed):
+	sizes_more_than = [s for s in get_sizes(root_dir) if s >= min_needed]
+	smallest = min(sizes_more_than)
+	return smallest
+
+#run_commands(parse_rounds("input_Day7.txt"))
+#print(size_smallest_dir(ROOT, 30000000 - (70000000 - ROOT.get_size())))
 
 ### DAY 8 CODE ###
 
+### Part a ###
+def load_array(txt_fle):
+	with open(txt_fle, "r") as myfile:
+		round_lsts = [[int(j) for j in list(i.replace('\n', ''))] for i in myfile.readlines()]
+		return np.array(round_lsts)
 
+def blocked_left(i, j, mat):
+	for neighbor in mat[i][:j]:
+		if neighbor >= mat[i][j]:
+			return True
+	return False
+
+def blocked_right(i, j, mat):
+	for neighbor in mat[i][j+1:]:
+		if neighbor >= mat[i][j]:
+			return True
+	return False
+
+def blocked_top(i, j, mat):
+	for neighbor in np.transpose(mat)[j][:i]:
+		if neighbor >= np.transpose(mat)[j][i]:
+			return True
+	return False
+
+def blocked_bottom(i, j, mat):
+	for neighbor in np.transpose(mat)[j][i+1:]:
+		if neighbor >= np.transpose(mat)[j][i]:
+			return True
+	return False
+
+def blocked(i, j, mat):
+	return blocked_left(i, j, mat) and blocked_right(i, j, mat) and blocked_top(i, j, mat) and blocked_bottom(i, j, mat)
+
+def count_visible(mat):
+	visible_mat = np.ones(mat.shape)
+	for i in range(1, mat.shape[0] - 1): # row
+		for j in range(1, mat.shape[1] - 1): # col
+			if blocked(i, j, mat):
+				visible_mat[i][j] = 0 
+	return np.sum(visible_mat)
+
+
+############################## Part b ##############################
+def view_left(i, j, mat):
+	neighbors = np.flip(mat[i][:j])
+	for n in range(len(neighbors)):
+		if neighbors[n] >= mat[i][j]:
+			break
+	return n+1
+
+def view_right(i, j, mat):
+	neighbors = mat[i][j+1:]
+	for n in range(len(neighbors)):
+		if neighbors[n] >= mat[i][j]:
+			break
+	return n+1
+
+def view_top(i, j, mat):
+	neighbors = np.flip(np.transpose(mat)[j][:i])
+	for n in range(len(neighbors)):
+		if neighbors[n] >= np.transpose(mat)[j][i]:
+			break
+	return n+1
+
+def view_bottom(i, j, mat):
+	neighbors = np.transpose(mat)[j][i+1:]
+	for n in range(len(neighbors)):
+		if neighbors[n] >= np.transpose(mat)[j][i]:
+			break
+	return n+1
+
+def max_scenic_score(mat):
+	scenic_scores = np.zeros(mat.shape)
+	for i in range(1, mat.shape[0] - 1): # row
+		for j in range(1, mat.shape[1] - 1): # col
+			scenic_scores[i][j] = view_top(i, j, mat) * view_bottom(i, j, mat) * view_right(i, j, mat) * view_left(i, j, mat)
+	return np.amax(scenic_scores)
+
+print(max_scenic_score(load_array("input_Day8.txt")))
 
 ### DAY 9 CODE ###
 
