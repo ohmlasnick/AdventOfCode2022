@@ -297,7 +297,6 @@ def count_visible(mat):
 				visible_mat[i][j] = 0 
 	return np.sum(visible_mat)
 
-
 ############################## Part b ##############################
 def view_left(i, j, mat):
 	neighbors = np.flip(mat[i][:j])
@@ -334,11 +333,114 @@ def max_scenic_score(mat):
 			scenic_scores[i][j] = view_top(i, j, mat) * view_bottom(i, j, mat) * view_right(i, j, mat) * view_left(i, j, mat)
 	return np.amax(scenic_scores)
 
-print(max_scenic_score(load_array("input_Day8.txt")))
+#print(max_scenic_score(load_array("input_Day8.txt")))
 
 ### DAY 9 CODE ###
 
+class Head:
 
+	def __init__(self, pos):
+		self.name = 'Head'
+		self.pos = pos
+		self.tails = []
+
+	def move_head(self, direc, steps):
+		HEAD_POS = self.pos
+		for i in range(steps):
+			if direc == 'U':
+				HEAD_POS[0] += 1
+			elif direc == 'D':
+				HEAD_POS[0] -= 1
+			elif direc == 'R':
+				HEAD_POS[1] += 1
+			else:
+				HEAD_POS[1] -= 1
+			for tail in self.tails:
+				tail.check_tail()
+
+class Tail:
+
+	def __init__(self, name, pos, head):
+  		self.pos = pos
+  		self.name = name
+  		self.head = head
+  		self.visited = []
+
+	def touching(self):
+		HEAD_POS = self.head.pos
+		row_diff = abs(HEAD_POS[0] - self.pos[0])
+		col_diff = abs(HEAD_POS[1] - self.pos[1])
+		dist = row_diff + col_diff
+		return (HEAD_POS[0] == self.pos[0] and dist <= 1) or (HEAD_POS[1] == self.pos[1] and dist <= 1) or (row_diff == 1 and col_diff == 1)
+
+	def is_diag_up_left(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] > self.pos[0] and HEAD_POS[1] < self.pos[1]
+
+	def is_diag_up_right(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] > self.pos[0] and HEAD_POS[1] > self.pos[1]
+
+	def is_diag_down_left(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] < self.pos[0] and HEAD_POS[1] < self.pos[1]
+
+	def is_diag_down_right(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] < self.pos[0] and HEAD_POS[1] > self.pos[1]
+
+	def is_top(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[1] == self.pos[1] and HEAD_POS[0] > self.pos[0]
+
+	def is_bottom(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[1] == self.pos[1] and HEAD_POS[0] < self.pos[0]
+
+	def is_left(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] == self.pos[0] and HEAD_POS[1] < self.pos[1]
+
+	def is_right(self):
+		HEAD_POS = self.head.pos
+		return HEAD_POS[0] == self.pos[0] and HEAD_POS[1] > self.pos[1]
+
+	def check_tail(self):
+		TAIL_POS = self.pos
+		if not self.touching():
+			if self.is_diag_up_left():
+				TAIL_POS[0] += 1
+				TAIL_POS[1] -= 1
+			elif self.is_diag_up_right():
+				TAIL_POS[0] += 1
+				TAIL_POS[1] += 1
+			elif self.is_diag_down_left():
+				TAIL_POS[0] -= 1
+				TAIL_POS[1] -= 1
+			elif self.is_diag_down_right():
+				TAIL_POS[0] -= 1
+				TAIL_POS[1] += 1
+			elif self.is_top():
+				TAIL_POS[0] += 1
+			elif self.is_bottom():
+				TAIL_POS[0] -= 1
+			elif self.is_left():
+				TAIL_POS[1] -= 1
+			elif self.is_right():
+				TAIL_POS[1] += 1
+		self.visited += [str(TAIL_POS[0])+str(TAIL_POS[1])]
+
+def pull_rope(lst_of_moves):
+	HEAD = Head([0,0])
+	HEAD.tails += [Tail('1', [0,0], HEAD)]
+	for t in range(2,10):
+		HEAD.tails += [Tail(str(t), [0,0], HEAD.tails[t-2])]
+	for move in lst_of_moves:
+		direc, steps = move.split(' ')
+		HEAD.move_head(direc, int(steps))
+	return len(set(HEAD.tails[8].visited))
+
+print(pull_rope(parse_rounds("input_Day9.txt")))
 
 ### DAY 10 CODE ###
 
