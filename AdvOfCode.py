@@ -1,5 +1,12 @@
 import numpy as np
 from time import sleep
+from math import ceil, floor
+import copy
+import re
+from functools import reduce
+import inspect
+from queue import Queue
+import itertools
 
 ### DAY 1 CODE ###
 
@@ -440,22 +447,280 @@ def pull_rope(lst_of_moves):
 		HEAD.move_head(direc, int(steps))
 	return len(set(HEAD.tails[8].visited))
 
-print(pull_rope(parse_rounds("input_Day9.txt")))
+#print(pull_rope(parse_rounds("input_Day9.txt")))
 
 ### DAY 10 CODE ###
 
+class Clock:
 
+	def __init__(self, cpu_display):
+		self.cycle = 0
+		self.cpu_display = cpu_display
+
+	def tick(self):
+		# every time it ticks, needs to check if row has changed
+		self.cpu_display.draw_pixel(self.cycle)
+		self.cycle += 1
+		self.cpu_display.col += 1
+		if self.cpu_display.col > 39:
+			self.cpu_display.row += 1
+			self.cpu_display.col = 0
+
+class Register:
+
+	def __init__(self):
+		self.value = 1
+
+class CPU:
+
+	def __init__(self):
+		self.name = 'CPU'
+		self.clock = Clock(self)
+		self.register = Register()
+		self.sprite_pixels = [0, 1, 2]
+		self.row = 0
+		self.col = 0
+		self.pixels = np.reshape(np.array(['.'] * 240), (6,40))
+
+	def signal_strength(self):
+		return self.clock.cycle * self.register.value
+
+	def addx(self, val):
+		self.register.value += val
+		self.sprite_pixels = [self.register.value - 1, self.register.value, self.register.value + 1]
+
+	def render(self):
+		for row in self.pixels:
+			print("".join(row))
+
+	def draw_pixel(self, cycle):
+		for s in self.sprite_pixels:
+			if s == self.col:
+				self.pixels[self.row][self.col] = '#'
+
+def execute_CPU_coms(lst_of_cpu_coms):
+	signal_strengths = []
+	cpu = CPU()
+	cpu.render()
+	for com in lst_of_cpu_coms:
+		if 'addx' in com:
+			cpu.clock.tick()
+			signal_strengths += [cpu.signal_strength()]
+			cpu.clock.tick()
+			signal_strengths += [cpu.signal_strength()]
+			cpu.addx(int(com.split(' ')[1]))
+		elif 'noop' in com:
+			cpu.clock.tick()
+			signal_strengths += [cpu.signal_strength()]
+	filtered = [signal_strengths[19],signal_strengths[59],signal_strengths[99],
+				signal_strengths[139],signal_strengths[179],signal_strengths[219]]
+	cpu.render()
+	return sum(filtered)
+
+#print(execute_CPU_coms(parse_rounds("input_Day10.txt")))
 
 ### DAY 11 CODE ###
 
+def greatest_comm_d(a, b):
+    if b == 0:
+        return a
+    else:
+    	return greatest_comm_d(b, a % b)
 
+def least_comm_mult(a, b):
+    return (a * b) // greatest_comm_d(a, b)
+
+class Monkey:
+
+	def __init__(self, name, items, op, test):
+		self.name = name
+		self.items = items
+		self.op = op
+		self.test = test
+		self.true_monkey = None
+		self.false_monkey = None
+		self.to_be_deleted = []
+		self.num_inspections = 0
+
+	def throw_item(self, item, monkey):
+		monkey.items += [copy.deepcopy(item)]
+		ind = self.items.index(item)
+		self.to_be_deleted += [ind]
+
+	def inspect(self, item, least_common):
+		item.worry_level = self.op(item.worry_level) % least_common
+		self.num_inspections += 1
+
+	def test_func(self, item):
+		return item.worry_level % self.test == 0
+
+	def test_worry(self, item):
+		if self.test_func(item):
+			self.throw_item(item, self.true_monkey)
+		else:
+			self.throw_item(item, self.false_monkey)
+
+	def delete_thrown_items(self):
+		self.items = [v for i, v in enumerate(self.items) if i not in self.to_be_deleted]
+
+class Item:
+
+	def __init__(self, worry_level):
+		self.worry_level = worry_level
+
+def create_monkeys():
+	monkeys = [Monkey('0', [Item(99),Item(63),Item(76),Item(93),Item(54),Item(73)], lambda x: x*11, 2),
+				Monkey('1', [Item(91),Item(60),Item(97),Item(54)], lambda x: x+1, 17),
+				Monkey('2', [Item(65)], lambda x: x+7, 7),
+				Monkey('3', [Item(84),Item(55)], lambda x: x+3, 11),
+				Monkey('4', [Item(86),Item(63),Item(79),Item(54),Item(83)], lambda x: x*x, 19),
+				Monkey('5', [Item(96),Item(67),Item(56),Item(95),Item(64),Item(69),Item(96)], lambda x: x+4, 5),
+				Monkey('6', [Item(66),Item(94),Item(70),Item(93),Item(72),Item(67),Item(88),Item(51)], lambda x: x*5, 13),
+				Monkey('7', [Item(59),Item(59),Item(74)], lambda x: x+8, 3)]
+	monkeys[0].true_monkey = monkeys[7]
+	monkeys[0].false_monkey = monkeys[1]
+	monkeys[1].true_monkey = monkeys[3]
+	monkeys[1].false_monkey = monkeys[2]
+	monkeys[2].true_monkey = monkeys[6]
+	monkeys[2].false_monkey = monkeys[5]
+	monkeys[3].true_monkey = monkeys[2]
+	monkeys[3].false_monkey = monkeys[6]
+	monkeys[4].true_monkey = monkeys[7]
+	monkeys[4].false_monkey = monkeys[0]
+	monkeys[5].true_monkey = monkeys[4]
+	monkeys[5].false_monkey = monkeys[0]
+	monkeys[6].true_monkey = monkeys[4]
+	monkeys[6].false_monkey = monkeys[5]
+	monkeys[7].true_monkey = monkeys[1]
+	monkeys[7].false_monkey = monkeys[3]
+	return monkeys
+
+def do_n_rounds(monkeys, n):
+	least_common = reduce(least_comm_mult, [m.test for m in monkeys])
+	for i in range(n):
+		for m in monkeys:
+			for item in m.items:
+				m.inspect(item, least_common)
+				#item.worry_level = floor(item.worry_level / 3.)
+				m.test_worry(item)
+			m.delete_thrown_items()
+	items_counted = []
+	for m in monkeys:
+		items_counted += [m.num_inspections]
+	items_counted = sorted(items_counted, reverse=True)
+	monkey_business = items_counted[0] * items_counted[1]
+	return monkey_business
+
+#print(do_n_rounds(create_monkeys(), 10000))
 
 ### DAY 12 CODE ###
 
+class BOARD:
 
+	def __init__(self, squares):
+		self.squares = squares
+		self.graph = np.array([np.array(list(row)) for row in parse_rounds("input_Day12.txt")])
+
+def can_move(square, char, board):
+	r, c = square.split(',')
+	from_char = board.graph[int(r)][int(c)]
+	if from_char == 'E':
+		from_char = 'z'
+	if char == 'E':
+		char = 'z'
+	return ord(from_char)+1 == ord(char) or ord(from_char) >= ord(char)
+
+def get_neighbors(square, board):
+	r,c = [int(coord) for coord in square.split(',')]
+	neighbors, n_pos = [], []
+	squares = [[r-1,c],
+				[r+1,c],
+				[r,c-1],
+				[r,c+1]]
+	for s in squares:
+		if (0 <= s[0] < 41) and (0 <= s[1] < 66): # within board range
+			square_s = board.graph[s[0]][s[1]]
+			if can_move(square, square_s, board):
+				neighbors += [str(s[0]) + ',' + str(s[1])]
+	return neighbors
 
 ### DAY 13 CODE ###
 
+def in_right_order(p1_lst, p2_lst, level=0):
+	for left, right in itertools.zip_longest(p1_lst, p2_lst):
+		#print(' ' * level, 'Compare ', left, ' to ', right)
+		if type(left) == int and type(right) == int:
+			# Can stop at first pair of vals that are not equal
+			if left < right:
+				return True
+			elif right < left:
+				return False
+			else:
+				continue
+		if left == None and right != None:
+			return True
+		if right == None and left != None:
+			return False
+		if type(left) == list and type(right) == list:
+			# Retry by comparing values in left, right
+			do_next = in_right_order(left, right, level+1)
+		if type(left) == int and type(right) == list:
+			# Retry with int as list
+			do_next = in_right_order([left], right, level+1)
+		if type(right) == int and type(left) == list:
+			# Retry with int as list
+			do_next = in_right_order(left, [right], level+1)
+		if do_next == None:
+			continue
+		else:
+			return do_next
 
+def compare_all_packets(fle):
+	import json
+	pairs = [p for p in parse_rounds(fle) if p.strip() != '']
+	right_order = []
+	i = 0
+	p_ind = 1
+	end = (len(pairs) - 1)
+	while i < end:
+		p1_lst = json.loads(pairs[i])
+		p2_lst = json.loads(pairs[i+1])
+		ordered = in_right_order(p1_lst, p2_lst)
+		if ordered:
+			right_order += [p_ind]
+		p_ind += 1
+		i += 2
+	return sum(right_order)
+
+def custom_sort_decode(fle):
+	import json
+	pairs = [json.loads(p) for p in parse_rounds(fle) if p.strip() != '']
+	sorted_pairs = []
+	for p in pairs:
+		yet_inserted = False
+		print("Inserting ", p)
+		if len(sorted_pairs) == 0:
+			sorted_pairs += [p]
+			continue
+		for i in range(len(sorted_pairs)):
+			sort_p = sorted_pairs[i]
+			print("     Comparing to ", sort_p)
+			smaller = in_right_order(p, sort_p)
+			print("          Smaller: ", smaller)
+			if smaller:
+				sorted_pairs.insert(i, p)
+				yet_inserted = True
+				break
+		if not yet_inserted:
+			sorted_pairs += [p]
+		print("          New sorted: ", sorted_pairs)
+	for p in sorted_pairs:
+		print(p)
+	decoder_ind1, decoder_ind2 = sorted_pairs.index([[2]]), sorted_pairs.index([[6]])
+	print(decoder_ind1, decoder_ind2)
+	return (decoder_ind1+1) * (decoder_ind2+1)
+
+#print(compare_all_packets("input_Day13.txt"))
+#print(custom_sort_decode("input_Day13.txt"))
 
 ### DAY 14 CODE ###
