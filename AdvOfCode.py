@@ -615,35 +615,6 @@ def do_n_rounds(monkeys, n):
 
 ### DAY 12 CODE ###
 
-class BOARD:
-
-	def __init__(self, squares):
-		self.squares = squares
-		self.graph = np.array([np.array(list(row)) for row in parse_rounds("input_Day12.txt")])
-
-def can_move(square, char, board):
-	r, c = square.split(',')
-	from_char = board.graph[int(r)][int(c)]
-	if from_char == 'E':
-		from_char = 'z'
-	if char == 'E':
-		char = 'z'
-	return ord(from_char)+1 == ord(char) or ord(from_char) >= ord(char)
-
-def get_neighbors(square, board):
-	r,c = [int(coord) for coord in square.split(',')]
-	neighbors, n_pos = [], []
-	squares = [[r-1,c],
-				[r+1,c],
-				[r,c-1],
-				[r,c+1]]
-	for s in squares:
-		if (0 <= s[0] < 41) and (0 <= s[1] < 66): # within board range
-			square_s = board.graph[s[0]][s[1]]
-			if can_move(square, square_s, board):
-				neighbors += [str(s[0]) + ',' + str(s[1])]
-	return neighbors
-
 ### DAY 13 CODE ###
 
 def in_right_order(p1_lst, p2_lst, level=0):
@@ -724,3 +695,213 @@ def custom_sort_decode(fle):
 #print(custom_sort_decode("input_Day13.txt"))
 
 ### DAY 14 CODE ###
+
+class Map():
+
+	def __init__(self, floor=False):
+		self.floor = floor
+		self.rocks = parse_rocks(parse_rounds("Day14_example.txt"))
+		self.scan_map = [['.','.'],
+						['.','.']]
+		self.x = len(self.scan_map)
+		self.y = len(self.scan_map[0])
+		for rock in self.rocks:
+			for line in rock.lines:
+				segments = line.get_intermed()
+				for seg in segments:
+					if seg[1] >= self.x or seg[0] >= self.y:
+						print('expanding map...')
+						self.expand_map(seg[1], seg[0])
+					self.scan_map[seg[1]][seg[0]] = '#'
+		try:
+			self.scan_map[0][500] = '+'
+		except:
+			self.expand_map(0, 500)
+		print('shrinking map...')
+		self.shrink_map()
+		# Add empty 1st and last cols so sand can fall into void
+		self.expand_map(0, len(self.scan_map[0]))
+		self.expand_map(0, -1)
+		if floor:
+			self.add_floor()
+		self.show_map()
+		print('Size: ', len(self.scan_map), ' x ', len(self.scan_map[0]))
+		#print(self.x, self.y)
+
+	def count_sand(self):
+		count = 0
+		for row in self.scan_map:
+			for cell in row:
+				if cell == 'o' or cell == '+':
+					count += 1
+		return count
+
+	def show_map(self):
+		for row in self.scan_map:
+			print("".join(row))
+
+	def expand_map(self, new_x, new_y):
+		while new_x >= self.x:
+			self.scan_map += [['.'] * self.y]
+			self.x += 1
+		while new_y >= self.y:
+			for row in range(self.x):
+				self.scan_map[row].append('.')
+			self.y += 1
+		if new_y == -1:
+			for row in range(self.x):
+				self.scan_map[row] = ['.'] + self.scan_map[row]
+			self.y += 1
+
+	def shrink_map(self):
+		# Get rid of unnecessary rows and columns (all dots)
+		num_rows_remove = 0
+		transposed_scan = list(zip(*self.scan_map))
+		for i in range(self.x):
+			row = self.scan_map[i]
+			if '#' not in row and '+' not in row:
+				num_rows_remove += 1
+			else:
+				break
+		num_cols_remove = 0
+		for j in range(self.y):
+			col = transposed_scan[j]
+			if '#' not in col and '+' not in col:
+				num_cols_remove += 1
+			else:
+				break
+		self.scan_map = self.scan_map[num_rows_remove:]
+		transposed_scan = [list(z) for z in zip(*self.scan_map)][num_cols_remove:]
+		self.scan_map = [list(z) for z in zip(*transposed_scan)]
+		self.x = len(self.scan_map)
+		self.y = len(self.scan_map[0])
+
+	def add_floor(self):
+		self.expand_map((self.x + 1), 0)
+		self.scan_map[self.x - 1] = ['#'] * self.y
+
+class Rock():
+
+	def __init__(self, name, lines):
+		self.name = name
+		self.lines = lines
+
+class Line():
+
+	def __init__(self, start, end):
+		make_coords = lambda strng: [int(s) for s in strng.split(',')]
+		self.coords = [make_coords(start), make_coords(end)]
+
+	def get_intermed(self):
+		start, end = self.coords
+		diff_x = end[0] - start[0]
+		diff_y = end[1] - start[1]
+		between = []
+		if diff_x == 0:
+			sign = diff_y // abs(diff_y)
+			for i in range(1, abs(diff_y)):
+				between += [[start[0], start[1] + (sign * i)]]
+		else:
+			sign = diff_x // abs(diff_x)
+			for i in range(1, abs(diff_x)):
+				between += [[start[0] + (sign * i), start[1]]]
+		return [start] + between + [end]
+
+class Sand():
+
+	def __init__(self, rock_map):
+		self.pos_x = 0
+		self.pos_y = rock_map.scan_map[0].index('+')
+		self.map = rock_map
+
+	def free_below(self):
+		if self.on_floor():
+			return False
+		return self.map.scan_map[self.pos_x + 1][self.pos_y] == '.'
+
+	def free_left(self):
+		# If there's no space, you can expand walls
+		if self.on_floor():
+			return False
+		if self.pos_y == 0:
+			# but only if right is also blocked
+			if not self.free_right():
+				self.map.expand_map(0, -1)
+				if self.map.floor:
+					self.map.scan_map[self.map.x - 1] = ['#'] * self.map.y
+			else:
+				return False
+		return self.map.scan_map[self.pos_x + 1][self.pos_y - 1] == '.'
+
+	def free_right(self):
+		# If there's no space, you can expand walls
+		if self.on_floor():
+			return False
+		try:
+			return self.map.scan_map[self.pos_x + 1][self.pos_y + 1] == '.'
+		except:
+			self.map.expand_map(0, self.map.y)
+			if self.map.floor:
+				self.map.scan_map[self.map.x - 1] = ['#'] * self.map.y
+			return self.map.scan_map[self.pos_x + 1][self.pos_y + 1] == '.'
+
+	def move(self, direc):
+		# free previous position if not origin
+		if not self.map.scan_map[self.pos_x][self.pos_y] == '+':
+			self.map.scan_map[self.pos_x][self.pos_y] = '.'
+		self.pos_x += 1
+		if direc == 'left-diag':
+			self.pos_y -= 1
+		elif direc == 'right-diag':
+			self.pos_y += 1
+		# move sand to new position
+		self.map.scan_map[self.pos_x][self.pos_y] = 'o'
+
+	def is_settled(self):
+		return self.on_floor() or ((not self.free_below()) and (not self.free_left()) and (not self.free_right()))
+
+	def on_floor(self):
+		if self.map.floor:
+			return (self.pos_x + 1) == (self.map.x - 1)
+		else:
+			return False
+
+	def in_void(self):
+		# if true, can return the total number of settled sands
+		if self.map.floor:
+			return self.is_settled() and self.pos_x == 0 and self.pos_y == self.map.scan_map[0].index('+')
+		return self.pos_x == (len(self.map.scan_map) - 1)
+
+def parse_rocks(rocks):
+	all_rocks = []
+	i = 1
+	for rock in rocks:
+		lines = rock.split(' -> ')
+		line_objs = []
+		for l in range(len(lines) - 1):
+			obj = Line(lines[l], lines[l + 1])
+			line_objs += [obj]
+		all_rocks += [Rock(str(i), line_objs)]
+		i += 1
+	return all_rocks
+
+def drop_sand():
+	my_map = Map(floor=True)
+	while True:
+		# create new piece of sand
+		sand = Sand(my_map)
+		while (not sand.in_void()) and (not sand.is_settled()):
+			sleep(0.03)
+			if sand.free_below():
+				sand.move('down')
+			elif sand.free_left():
+				sand.move('left-diag')
+			elif sand.free_right():
+				sand.move('right-diag')
+			sand.map.show_map()
+		if sand.in_void():
+			return sand.map.count_sand()
+
+#print(drop_sand())
+
+### DAY 15 CODE ###
