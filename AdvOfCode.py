@@ -905,3 +905,100 @@ def drop_sand():
 #print(drop_sand())
 
 ### DAY 15 CODE ###
+
+def manhattan(x1, y1, x2, y2):
+	return abs(x2 - x1) + abs(y2 - y1)
+
+class Sensor():
+
+	def __init__(self, x, y, beacon):
+		self.closest = beacon
+		self.x = x
+		self.y = y
+		self.d = manhattan(x, y, beacon.x, beacon.y)
+
+	def no_beacon(self, x, y):
+		# determines whether x, y is in the range defined
+		# by signal-beacon pair, & therefore can't contain a beacon
+		b_x, b_y = self.closest.x, self.closest.y
+		rnge = manhattan(self.x, self.y, b_x, b_y)
+		test_rnge = manhattan(self.x, self.y, x, y)
+		if (b_x == x and b_y == y):
+			return False
+		if test_rnge <= rnge:
+			return True
+		return False
+
+class Beacon():
+
+	def __init__(self, x, y):
+		self.x = x
+		self.y = y
+
+class Signal_Map():
+
+	def __init__(self, inp_fle):
+		pairs = parse_rounds(inp_fle)
+		sensors = []
+		beacons = []
+		xs = []
+		ys = []
+		for p in pairs:
+			p = "".join(p.split(' ')[2:4] + p.split(' ')[8:]).replace(':',' ').replace(',', ' ').replace('=', '').replace('x', '').replace('y', '')
+			split_coords = p.split(' ')
+			s_x, s_y, b_x, b_y = [int(i) for i in split_coords]
+			beac = Beacon(b_x, b_y)
+			sens = Sensor(s_x, s_y, beac)
+			sensors += [sens]
+			beacons += [beac]
+			xs += [s_x - sens.d, s_x + sens.d] # can search the manhattan distance from each sensor
+		self.sensors = sensors
+		self.beacons = beacons
+		self.xs = xs
+
+	def no_beacon_in_row(self, y):
+		min_x, max_x = min(self.xs), max(self.xs)
+		total = 0
+		for x in range(min_x, max_x):
+			for sensor in self.sensors:
+				no_beacon = sensor.no_beacon(x, y)
+				if no_beacon:
+					# once you know there's no beacon, move on to next cell
+					total += 1
+					break
+		return total
+
+	def possible_distress_beacon(self, x, y):
+		beacons = [(b.x, b.y) for b in self.beacons]
+		#print((x, y) in beacons)
+		for sensor in self.sensors:
+			if manhattan(sensor.x, sensor.y, x, y) <= sensor.d or (x, y) in beacons:
+				return False
+		return True
+
+	def find_beacon(self, area):
+		beacons = [(b.x, b.y) for b in self.beacons]
+		print(beacons)
+		print('Range: ', 0, area)
+		for i in range(len(self.sensors)):
+			# each sensor should only search 1 beyond the border of its designated area
+			sensor = self.sensors[i]
+			print('Sensor ', i + 1, ': searching')
+			for dx in range(sensor.d + 2):
+				dy = (sensor.d + 1) - dx # math checks out
+				#for dy in range((sensor.d + 1) - dx):
+				#print('   Unsigned: ', dx, dy)
+				for s1, s2 in [(-1, 1), (1, -1), (-1, -1), (1, 1)]:
+					s_dx, s_dy = s1 * dx, s2 * dy
+					#print('   ', s_dx, s_dy)
+					x, y = s_dx + sensor.x, s_dy + sensor.y
+					if (not 0 <= x <= area) or (not 0 <= y <= area):
+						#print('     ', x, y, " out of range, don't search")
+						continue
+					#print('     ', x, y, 'Distance: ', manhattan(sensor.x, sensor.y, x, y), 'Max distance: ', sensor.d)
+					if self.possible_distress_beacon(x, y):
+						return (4000000 * x) + y
+
+print(Signal_Map("input_Day15.txt").find_beacon(4000000))
+
+### DAY 16 CODE ### 
